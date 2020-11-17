@@ -70,9 +70,8 @@ public class SFTInputMove<P, F, S> extends SFTMove<P, F, S>{
 		StringBuilder label = new StringBuilder(guard + "/\n");
 		for (F outputFunction: outputFunctions) {
 			label.append(outputFunction.toString());
-			label.append('\n');
 		}
-		return String.format("%s -> %s [label=\"%s\"]\n", from, to, label.toString());
+		return String.format("%s -> %s [label=\"%s\"];\n", from, to, label.toString());
 	}
 
 	@Override

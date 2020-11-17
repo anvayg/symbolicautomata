@@ -1056,7 +1056,28 @@ public class SFA<P, S> extends Automaton<P, S> {
         }
         return true;
     }
-
+    
+    /**
+     * checks if aut1 is included in aut2
+     * 
+     * @throws TimeoutException
+     */
+    public boolean includedIn(SFA<P, S> aut2, BooleanAlgebra<P, S> ba) 
+    		throws TimeoutException {
+    	return included(this, aut2, ba);
+    }
+    
+    
+    /**
+     * checks if aut1 is included in aut2
+     * 
+     * @throws TimeoutException
+     */
+    public static <A, B> boolean included(SFA<A, B> aut1, SFA<A, B> aut2, BooleanAlgebra<A, B> ba) 
+    		throws TimeoutException {
+    	return (aut1.minus(aut2, ba).isEmpty());
+    }
+    
 
 	/**
 	 * concatenation with aut

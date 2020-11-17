@@ -1316,4 +1316,23 @@ public class SFT<P, F, S> extends Automaton<P, S> {
 				s = s + fs + " " + getFinalStatesAndTails().get(fs) + "\n";
 		return s;
 	}
+	
+	public String toDotString(BooleanAlgebraSubst<P, F, S> ba) throws TimeoutException {
+		StringBuilder sb = new StringBuilder();
+		
+		sb.append("digraph {\n");
+		for (Integer state : states) {
+			sb.append(state + " " + "[label=\"" + state + "\"];\n");
+		}
+		
+		for (Integer state : states) {
+			Collection<SFTInputMove<P, F, S>> transitions = getInputMovesFrom(state);
+			for (SFTInputMove<P, F, S> transition : transitions) {
+				sb.append(transition.toDotString());
+			}
+		}
+		sb.append("}");
+		
+		return sb.toString();
+	}
 }
