@@ -25,6 +25,8 @@ import automata.sfa.SFAMove;
 import automata.sfa.SFAEpsilon;
 import automata.sfa.SFAInputMove;
 import theory.BooleanAlgebraSubst;
+import theory.characters.CharFunc;
+import theory.characters.CharPred;
 import utilities.Pair;
 
 
@@ -1053,6 +1055,127 @@ public class SFT<P, F, S> extends Automaton<P, S> {
 
 		return SFA.MkSFA(transitions, initialState, finalStates, ba);
 	}
+	
+	/**
+	 * Computes an overapproximation of the output language  of this transducer
+	 * @param ba
+	 * @return output SFA
+	 * @throws TimeoutException
+	 */
+	public SFA<P, S> getOverapproxOutputSFA(BooleanAlgebraSubst<P, F, S> ba) throws TimeoutException {
+
+		Collection<SFAMove<P, S>> transitions = new ArrayList<SFAMove<P, S>>();
+		Integer initialState;
+		Collection<Integer> finalStates = new HashSet<Integer>();
+
+		Map<Integer, Integer> reached = new HashMap<Integer, Integer>();
+		LinkedList<Integer> toVisit = new LinkedList<Integer>();
+
+		Integer moreStateId = this.maxStateId + 1;
+
+		// Add initial state
+		initialState = 0;
+		reached.put(this.initialState, initialState);
+		toVisit.push(this.initialState);
+
+		// depth first search
+		while (!toVisit.isEmpty()) {
+			Integer currState = toVisit.pop();
+			int currStateId = reached.get(currState);
+
+			if (this.isFinalState(currState)) {
+				Set<List<S>> tails = this.getFinalStatesAndTails().get(currState);
+				if (tails.size() == 0) {
+					finalStates.add(currStateId);
+				} else { // currState is a final state and it has non-empty tails
+					for (List<S> tail: tails) {
+						int nextStateId = getStateId(moreStateId++, reached, toVisit);
+						SFAInputMove<P, S> newTrans = new SFAInputMove<P, S>(currStateId, nextStateId,
+								ba.MkAtom(tail.get(0)));
+						transitions.add(newTrans);
+						int lastStateId = nextStateId;
+						for (int i = 1; i < tail.size(); i++) {
+							nextStateId = getStateId(moreStateId++, reached, toVisit);
+							newTrans = new SFAInputMove<P, S>(lastStateId, nextStateId,
+									ba.MkAtom(tail.get(i)));
+							transitions.add(newTrans);
+							lastStateId = nextStateId;
+						}
+						finalStates.add(lastStateId);
+					}
+				}
+			}
+
+			//Epsilon transitions
+			for (SFTEpsilon<P, F, S> t1 : this.getEpsilonMovesFrom(currState)) {
+				if (t1.outputs.size() == 0){
+					int nextStateId = getStateId(t1.to, reached, toVisit);
+					SFAEpsilon<P, S> newTrans = new SFAEpsilon<P, S>(currStateId, nextStateId);
+					transitions.add(newTrans);
+				}else{					
+					if (t1.outputs.size() == 1) {
+						int nextStateId = getStateId(t1.to, reached, toVisit);
+						SFAInputMove<P, S> newTrans = new SFAInputMove<P, S>(currStateId, nextStateId,
+								ba.MkAtom(t1.outputs.get(0)));
+						transitions.add(newTrans);
+					} else if (t1.outputs.size() > 1) {
+						int nextStateId = getStateId(moreStateId++, reached, toVisit);
+						SFAInputMove<P, S> newTrans = new SFAInputMove<P, S>(currStateId, nextStateId,
+								ba.MkAtom(t1.outputs.get(0)));
+						transitions.add(newTrans);
+						int lastStateId = nextStateId;
+						for (int i = 1; i < t1.outputs.size() - 1; i++) {
+							nextStateId = getStateId(moreStateId++, reached, toVisit);
+							newTrans = new SFAInputMove<P, S>(lastStateId, nextStateId, ba.MkAtom(t1.outputs.get(i)));
+							transitions.add(newTrans);
+							lastStateId = nextStateId;
+						}
+						nextStateId = getStateId(t1.to, reached, toVisit);
+						newTrans = new SFAInputMove<P, S>(currStateId, nextStateId, ba.MkAtom(t1.outputs.get(t1.outputs.size() - 1)));
+						transitions.add(newTrans);
+					}
+				}
+			}
+
+			//Input moves
+			for (SFTInputMove<P, F, S> t1 : this.getInputMovesFrom(currState)) {
+				if (t1.outputFunctions.size() == 0){
+					int nextStateId = getStateId(t1.to, reached, toVisit);
+					SFAEpsilon<P, S> newTrans = new SFAEpsilon<P, S>(currStateId, nextStateId);
+					transitions.add(newTrans);
+				} else {	
+					if (t1.outputFunctions.size() == 1) {
+						int nextStateId = getStateId(t1.to, reached, toVisit);
+						SFAInputMove<P, S> newTrans = new SFAInputMove<P, S>(currStateId, nextStateId,
+								ba.getRestrictedOutput(t1.guard, t1.outputFunctions.get(0)));
+						transitions.add(newTrans);
+					} else if (t1.outputFunctions.size() > 1) {
+						//Might lose precision
+						int nextStateId = getStateId(t1.to, reached, toVisit);
+						int count = 0;
+						int lastStateId = currStateId;
+						
+						for (F outputFunc : t1.outputFunctions) {
+							if (++count == t1.outputFunctions.size()) {
+								SFAInputMove<P, S> newTrans = new SFAInputMove<P, S>(lastStateId, nextStateId,
+										ba.getRestrictedOutput(t1.guard, outputFunc));
+								transitions.add(newTrans);
+							} else {
+								int newStateId = moreStateId; moreStateId++;
+								SFAInputMove<P, S> newTrans = new SFAInputMove<P, S>(lastStateId, newStateId,
+										ba.getRestrictedOutput(t1.guard, outputFunc));
+								transitions.add(newTrans);
+								lastStateId = newStateId;
+							}
+						}
+					}
+				}				
+			}
+
+		}
+
+		return SFA.MkSFA(transitions, initialState, finalStates, ba);
+	}
 
 	/**
 	 * Add Transition
@@ -1086,6 +1209,69 @@ public class SFT<P, F, S> extends Automaton<P, S> {
 				getInputMovesTo(transition.to).add((SFTInputMove<P, F, S>) transition);
 			}
 		}
+	}
+	
+	/**
+	 * Makes non-deterministic union with transducer2
+	 * 
+	 * @throws TimeoutException
+	 */
+	public SFT<P, F, S> unionWith(SFT<P, F, S> transducer2, BooleanAlgebraSubst<P, F, S> ba) throws TimeoutException {
+		return union(this, transducer2, ba);
+	}
+	
+	/**
+	 * Makes non-deterministic union of transducer1 and transducer2
+	 * 
+	 * @throws TimeoutException
+	 */
+	public static <A, B, C> SFT<A, B, C> union(SFT<A, B, C> transducer1, SFT<A, B, C> transducer2, 
+			BooleanAlgebraSubst<A, B, C> ba) throws TimeoutException {
+		Integer initialState1 = transducer1.initialState;
+		Integer initialState2 = transducer2.initialState;
+		Integer newInitialState = transducer1.maxStateId + 1;
+		int offset = transducer1.maxStateId + 2; 
+		
+		Collection<SFTMove<A, B, C>> newTransitions = new ArrayList<SFTMove<A, B, C>>();
+		Collection<SFTInputMove<A, B, C>> transitions1 = transducer2.getInputMovesFrom(initialState1);
+		for (SFTInputMove<A, B, C> transition : transitions1) {
+			SFTInputMove<A, B, C> newTransition = (SFTInputMove<A, B, C>) transition.clone();
+			newTransition.from = newInitialState;
+			newTransitions.add(newTransition);
+		}
+		
+		Collection<SFTInputMove<A, B, C>> transitions2 = transducer2.getInputMovesFrom(initialState2);
+		for (SFTInputMove<A, B, C> transition : transitions2) {
+			SFTInputMove<A, B, C> newTransition = (SFTInputMove<A, B, C>) transition.clone();
+			newTransition.from = newInitialState;
+			newTransition.to += offset;
+			newTransitions.add(newTransition);
+		}
+		
+		for (SFTMove<A, B, C> transition : transducer1.getTransitions()) {
+			if (transition.from != initialState1) {
+				newTransitions.add((SFTMove<A, B, C>) transition.clone());
+			}
+		}
+		
+		for (SFTMove<A, B, C> transition : transducer2.getTransitions()) {
+			if (transition.from != initialState2) {
+				SFTMove<A, B, C> newTransition = (SFTMove<A, B, C>) transition.clone();
+				newTransition.to += offset;
+				newTransition.from += offset;
+				newTransitions.add(newTransition);
+			}
+		}
+		
+		Map<Integer, Set<List<C>>> finStates = new HashMap<Integer, Set<List<C>>>();
+		finStates.putAll(transducer1.finalStatesAndTails);
+		for (Map.Entry <Integer, Set<List<C>>> state : transducer2.getFinalStatesAndTails().entrySet()) {
+			Integer finState = state.getKey();
+			Set<List<C>> tails = state.getValue();
+			finStates.put(finState + offset, tails);
+		} 
+		
+		return MkSFT(newTransitions, newInitialState, finStates, ba);
 	}
 
 
@@ -1230,6 +1416,28 @@ public class SFT<P, F, S> extends Automaton<P, S> {
 	public Collection<SFTMove<P, F, S>> getTransitions() {
 		return getTransitionsFrom(states);
 	}
+	
+	/**
+	 * Returns dot string representation of this transducer
+	 */
+	public String toDotString(BooleanAlgebraSubst<P, F, S> ba) throws TimeoutException {
+		StringBuilder sb = new StringBuilder();
+		
+		sb.append("digraph {\n");
+		for (Integer state : states) {
+			sb.append(state + " " + "[label=\"" + state + "\"];\n");
+		}
+		
+		for (Integer state : states) {
+			Collection<SFTInputMove<P, F, S>> transitions = getInputMovesFrom(state);
+			for (SFTInputMove<P, F, S> transition : transitions) {
+				sb.append(transition.toDotString());
+			}
+		}
+		sb.append("}");
+		
+		return sb.toString();
+	}
 
 	// Methods for superclass
 	@Override
@@ -1315,24 +1523,5 @@ public class SFT<P, F, S> extends Automaton<P, S> {
 			else
 				s = s + fs + " " + getFinalStatesAndTails().get(fs) + "\n";
 		return s;
-	}
-	
-	public String toDotString(BooleanAlgebraSubst<P, F, S> ba) throws TimeoutException {
-		StringBuilder sb = new StringBuilder();
-		
-		sb.append("digraph {\n");
-		for (Integer state : states) {
-			sb.append(state + " " + "[label=\"" + state + "\"];\n");
-		}
-		
-		for (Integer state : states) {
-			Collection<SFTInputMove<P, F, S>> transitions = getInputMovesFrom(state);
-			for (SFTInputMove<P, F, S> transition : transitions) {
-				sb.append(transition.toDotString());
-			}
-		}
-		sb.append("}");
-		
-		return sb.toString();
 	}
 }
