@@ -25,9 +25,12 @@ import automata.safa.SAFA;
 import automata.safa.SAFAInputMove;
 import automata.safa.booleanexpression.PositiveBooleanExpression;
 import theory.BooleanAlgebra;
+import theory.BooleanAlgebraSubst;
+import transducers.sft.SFTInputMove;
 import utilities.Block;
 import utilities.Pair;
 import utilities.Timers;
+import utilities.Triple;
 import utilities.UnionFindHopKarp;
 
 /**
@@ -1511,6 +1514,74 @@ public class SFA<P, S> extends Automaton<P, S> {
 
 		return MkSFA(transitions, initialState, finalStates, ba, false, true);
 	}
+	
+	/**
+	 * Make finite automata from the minterms of both aut1 and aut2
+	 * 
+	 * @throws TimeoutException
+	 */
+	@SuppressWarnings("unchecked")
+	public static <A, B> Triple<SFA<A, B>, SFA<A, B>, Collection<Pair<A, ArrayList<Integer>>>> 
+	MkFiniteSFA(SFA<A,B> aut1, SFA<A,B> aut2, BooleanAlgebra<A, B> ba) 
+			throws TimeoutException {
+		
+		// Get all predicates
+		ArrayList<A> predicates1 = new ArrayList<>(); 
+		ArrayList<A> predicates2 = new ArrayList<>(); 
+		 
+		for (Integer state : aut1.getStates()) {
+			for (SFAInputMove<A, B> transition : aut1.getInputMovesFrom(state)) {
+				predicates1.add(transition.guard);
+			}
+		}
+		
+		for (Integer state : aut2.getStates()) {
+			for (SFAInputMove<A, B> transition : aut2.getInputMovesFrom(state)) {
+				predicates2.add(transition.guard);
+			}
+		}
+		
+		predicates1.addAll(predicates2);
+		
+		// Get minterms
+		Collection<Pair<A, ArrayList<Integer>>> minterms = ba.GetMinterms(predicates1);
+		
+		// Make new transitions
+		Collection<SFAMove<A, B>> transitions1 = new ArrayList<SFAMove<A, B>>();
+		Collection<SFAMove<A, B>> transitions2 = new ArrayList<SFAMove<A, B>>();
+		
+		for (Integer state : aut1.getStates()) {
+			for (SFAInputMove<A, B> transition : aut1.getInputMovesFrom(state)) {
+				for (Pair<A, ArrayList<Integer>> minterm : minterms) {
+					A conj = ba.MkAnd(transition.guard, minterm.first);
+					if (ba.IsSatisfiable(conj)) {
+						SFAInputMove<A, B> newTransition = (SFAInputMove<A, B>) transition.clone();
+						newTransition.guard = minterm.first;
+						transitions1.add(newTransition);
+					}
+				}
+			}
+		}
+		
+		SFA<A, B> finAut1 = MkSFA(transitions1, aut1.initialState, aut1.finalStates, ba);
+		
+		for (Integer state : aut2.getStates()) {
+			for (SFAInputMove<A, B> transition : aut2.getInputMovesFrom(state)) {
+				for (Pair<A, ArrayList<Integer>> minterm : minterms) {
+					A conj = ba.MkAnd(transition.guard, minterm.first);
+					if (ba.IsSatisfiable(conj)) {
+						SFAInputMove<A, B> newTransition = (SFAInputMove<A, B>) transition.clone();
+						newTransition.guard = minterm.first;
+						transitions2.add(newTransition);
+					}
+				}
+			}
+		}
+		
+		SFA<A, B> finAut2 = MkSFA(transitions2, aut2.initialState, aut2.finalStates, ba);
+		
+		return new Triple<SFA<A, B>, SFA<A, B>, Collection<Pair<A, ArrayList<Integer>>>>(finAut1, finAut2, minterms);
+	}
 
 	// ------------------------------------------------------
 	// Automata properties
@@ -1958,6 +2029,28 @@ public class SFA<P, S> extends Automaton<P, S> {
 		for (Integer state : states)
 			transitions.addAll(getTransitionsFrom(state));
 		return transitions;
+	}
+	
+	/**
+	 * Returns dot string representation of this automaton
+	 */
+	public String toDotString(BooleanAlgebra<P, S> ba) throws TimeoutException {
+		StringBuilder sb = new StringBuilder();
+		
+		sb.append("digraph {\n");
+		for (Integer state : states) {
+			sb.append(state + " " + "[label=\"" + state + "\"];\n");
+		}
+		
+		for (Integer state : states) {
+			Collection<SFAInputMove<P, S>> transitions = getInputMovesFrom(state);
+			for (SFAInputMove<P, S> transition : transitions) {
+				sb.append(transition.toDotString());
+			}
+		}
+		sb.append("}");
+		
+		return sb.toString();
 	}
 
 	// ----------------------------------------------------

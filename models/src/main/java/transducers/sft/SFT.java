@@ -1225,6 +1225,7 @@ public class SFT<P, F, S> extends Automaton<P, S> {
 	 * 
 	 * @throws TimeoutException
 	 */
+	@SuppressWarnings("unchecked")
 	public static <A, B, C> SFT<A, B, C> union(SFT<A, B, C> transducer1, SFT<A, B, C> transducer2, 
 			BooleanAlgebraSubst<A, B, C> ba) throws TimeoutException {
 		Integer initialState1 = transducer1.initialState;
