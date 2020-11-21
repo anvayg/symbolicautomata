@@ -1521,7 +1521,7 @@ public class SFA<P, S> extends Automaton<P, S> {
 	 * @throws TimeoutException
 	 */
 	@SuppressWarnings("unchecked")
-	public static <A, B> Triple<SFA<A, B>, SFA<A, B>, Collection<Pair<A, ArrayList<Integer>>>> 
+	public static <A, B> Triple<SFA<A, B>, SFA<A, B>, Map<A, Pair<A, ArrayList<Integer>>>>
 	MkFiniteSFA(SFA<A,B> aut1, SFA<A,B> aut2, BooleanAlgebra<A, B> ba) 
 			throws TimeoutException {
 		
@@ -1545,6 +1545,13 @@ public class SFA<P, S> extends Automaton<P, S> {
 		
 		// Get minterms
 		Collection<Pair<A, ArrayList<Integer>>> minterms = ba.GetMinterms(predicates1);
+		Map<Pair<A, ArrayList<Integer>>, A> mintermToId = new HashMap<Pair<A, ArrayList<Integer>>, A>();
+		Map<A, Pair<A, ArrayList<Integer>>> idToMinterm = new HashMap<A, Pair<A, ArrayList<Integer>>>();
+		for (Pair<A, ArrayList<Integer>> minterm : minterms) {
+			A newPred = ba.MkAtom(ba.generateWitness(minterm.first));
+			mintermToId.put(minterm, newPred);
+			idToMinterm.put(newPred, minterm);
+		}
 		
 		// Make new transitions
 		Collection<SFAMove<A, B>> transitions1 = new ArrayList<SFAMove<A, B>>();
@@ -1556,14 +1563,14 @@ public class SFA<P, S> extends Automaton<P, S> {
 					A conj = ba.MkAnd(transition.guard, minterm.first);
 					if (ba.IsSatisfiable(conj)) {
 						SFAInputMove<A, B> newTransition = (SFAInputMove<A, B>) transition.clone();
-						newTransition.guard = minterm.first;
+						newTransition.guard = mintermToId.get(minterm);
 						transitions1.add(newTransition);
 					}
 				}
 			}
 		}
 		
-		SFA<A, B> finAut1 = MkSFA(transitions1, aut1.initialState, aut1.finalStates, ba);
+		SFA<A, B> finAut1 = MkSFA(transitions1, aut1.initialState, aut1.finalStates, ba, false, false);
 		
 		for (Integer state : aut2.getStates()) {
 			for (SFAInputMove<A, B> transition : aut2.getInputMovesFrom(state)) {
@@ -1571,17 +1578,18 @@ public class SFA<P, S> extends Automaton<P, S> {
 					A conj = ba.MkAnd(transition.guard, minterm.first);
 					if (ba.IsSatisfiable(conj)) {
 						SFAInputMove<A, B> newTransition = (SFAInputMove<A, B>) transition.clone();
-						newTransition.guard = minterm.first;
+						newTransition.guard = mintermToId.get(minterm);
 						transitions2.add(newTransition);
 					}
 				}
 			}
 		}
 		
-		SFA<A, B> finAut2 = MkSFA(transitions2, aut2.initialState, aut2.finalStates, ba);
+		SFA<A, B> finAut2 = MkSFA(transitions2, aut2.initialState, aut2.finalStates, ba, false, false);
 		
-		return new Triple<SFA<A, B>, SFA<A, B>, Collection<Pair<A, ArrayList<Integer>>>>(finAut1, finAut2, minterms);
+		return new Triple<SFA<A, B>, SFA<A, B>, Map<A, Pair<A, ArrayList<Integer>>>>(finAut1, finAut2, idToMinterm);
 	}
+	
 
 	// ------------------------------------------------------
 	// Automata properties

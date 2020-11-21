@@ -216,7 +216,7 @@ public class SFTRepExamples {
 		// SFA0.3: SFA that reads ALPHA.ALPHANUM*
 		List<SFAMove<CharPred, Character>> transitions03 = new LinkedList<SFAMove<CharPred, Character>>();
 		transitions03.add(new SFAInputMove<CharPred, Character>(0, 1, StdCharPred.ALPHA));
-		transitions03.add(new SFAInputMove<CharPred, Character>(1, 1, StdCharPred.ALPHA_NUM));
+		transitions03.add(new SFAInputMove<CharPred, Character>(1, 1, StdCharPred.LOWER_ALPHA));
 		List<Integer> finStates03 = new LinkedList<Integer>();
 		finStates03.add(1);
 		mySFA03 = SFA.MkSFA(transitions03, 0, finStates03, ba);
@@ -299,11 +299,18 @@ public class SFTRepExamples {
 	}
 	
 	@Test
-	public void testMkFiniteSFA() throws TimeoutException {
-		Triple<SFA<CharPred, Character>, SFA<CharPred, Character>, Collection<Pair<CharPred, ArrayList<Integer>>>> triple = 
-				SFA.MkFiniteSFA(mySFA01, mySFA02, ba);
-		SFA<CharPred, Character> finSFA01 = triple.first;
-		System.out.println(finSFA01.toDotString(ba));
+	public void testMkFiniteSFA() throws Exception {
+		Triple<SFA<CharPred, Character>, SFA<CharPred, Character>, Map<CharPred, Pair<CharPred, ArrayList<Integer>>>> triple = 
+				SFA.MkFiniteSFA(mySFA03, mySFA04, ba);
+		SFA<CharPred, Character> finSFA03 = triple.first;
+		SFA<CharPred, Character> finSFA04 = triple.second;
+		
+		int[] fraction = new int[]{1, 1};
+		SFT<CharPred, CharFunc, Character> repair = parseTransducer(callSolverSFA(finSFA03, finSFA04, fraction));
+		SFT<CharPred, CharFunc, Character> expanded = repair.mintermExpansion(triple.third, ba);
+		SFT<CharPred, CharFunc, Character> broken = MkIdentitySFT(mySFA03);
+		SFT<CharPred, CharFunc, Character> compose = broken.composeWith(expanded, ba);
+		assertTrue(compose.getOverapproxOutputSFA(ba).includedIn(mySFA04, ba));
 	}
 	
 	public static String callSolver(String regex1, String regex2, int[] fraction) throws IOException {
@@ -561,12 +568,14 @@ public class SFTRepExamples {
 //		System.out.println(transducer.toDotString(ba));
 		
 		String repair = callSolverSFA(badOutput, target, fraction);
+		String repairWhole = callSolverSFA(outputSFT13, target, fraction);
 		SFT<CharPred, CharFunc, Character> transducer = parseTransducer(repair);
-		System.out.println(transducer.toDotString(ba));
+		SFT<CharPred, CharFunc, Character> transducer2 = parseTransducer(repairWhole);
+		// System.out.println(transducer.toDotString(ba));
 		
 		SFA<CharPred, Character> outputRepair = transducer.getOverapproxOutputSFA(ba);
-		assertTrue(outputRepair.includedIn(target, ba));
-		
+		SFA<CharPred, Character> outputRepairWhole = transducer2.getOverapproxOutputSFA(ba);
+				
 		SFT<CharPred, CharFunc, Character> idTrans = MkIdentitySFT(goodOutput);
 		SFT<CharPred, CharFunc, Character> union = transducer.unionWith(idTrans, ba);
 		SFT<CharPred, CharFunc, Character> join = mySFT13.composeWith(union, ba);

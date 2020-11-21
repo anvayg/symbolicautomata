@@ -24,8 +24,10 @@ import automata.sfa.SFA;
 import automata.sfa.SFAMove;
 import automata.sfa.SFAEpsilon;
 import automata.sfa.SFAInputMove;
+import theory.BooleanAlgebra;
 import theory.BooleanAlgebraSubst;
 import theory.characters.CharFunc;
+import theory.characters.CharOffset;
 import theory.characters.CharPred;
 import utilities.Pair;
 
@@ -1273,6 +1275,36 @@ public class SFT<P, F, S> extends Automaton<P, S> {
 		} 
 		
 		return MkSFT(newTransitions, newInitialState, finStates, ba);
+	}
+	
+	/**
+	 * Performs minterm expansion of SFT
+	 * 
+	 * @throws TimeoutException
+	 */
+	public SFT<P, F, S> mintermExpansion(Map<P, Pair<P, ArrayList<Integer>>> idToMinterm, BooleanAlgebraSubst<P, F, S> ba) throws TimeoutException {
+		Collection<SFTMove<P, F, S>> newTransitions = new ArrayList<SFTMove<P, F, S>>();
+		
+		for (Integer state : getStates()) {
+			for (SFTInputMove<P, F, S> transition : this.getInputMovesFrom(state)) {
+				SFTInputMove<P, F, S> newTransition = (SFTInputMove<P, F, S>) transition.clone();
+				P pred = idToMinterm.get(newTransition.guard).first;
+				newTransition.guard = pred;
+				newTransitions.add(newTransition);
+			}
+		}
+		
+		return MkSFT(newTransitions, this.initialState, this.finalStatesAndTails, ba);
+	}
+	
+	/**
+	 * Checks whether the overapproximated output of transducer is included in aut
+	 * 
+	 * @throws TimeoutException
+	 */
+	public static <A, B, C> boolean checkOverapproxOutputInclusion(SFT<A, B, C> transducer, SFA<A, C> aut, 
+			BooleanAlgebraSubst<A, B, C> ba) throws TimeoutException {
+		return transducer.getOverapproxOutputSFA(ba).includedIn(aut, ba);
 	}
 
 
