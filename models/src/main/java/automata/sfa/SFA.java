@@ -2044,10 +2044,15 @@ public class SFA<P, S> extends Automaton<P, S> {
 	 */
 	public String toDotString(BooleanAlgebra<P, S> ba) throws TimeoutException {
 		StringBuilder sb = new StringBuilder();
+		Collection<Integer> finStates = getFinalStates();
 		
 		sb.append("digraph {\n");
 		for (Integer state : states) {
-			sb.append(state + " " + "[label=\"" + state + "\"];\n");
+			if (finStates.contains(state)) {
+				sb.append(state + " " + "[label=\"" + state + "\", peripheries = 2];\n");
+			} else {
+				sb.append(state + " " + "[label=\"" + state + "\"];\n");
+			}
 		}
 		
 		for (Integer state : states) {
